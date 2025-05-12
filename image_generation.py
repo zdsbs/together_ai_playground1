@@ -5,9 +5,14 @@ import requests
 from PIL import Image
 from io import BytesIO
 from datetime import datetime
+import base64
 
 # Load environment variables
 load_dotenv()
+
+# Model constants
+DEFAULT_MODEL = "black-forest-labs/FLUX.1-dev"
+ALTERNATIVE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 
 def ensure_images_directory():
     """Create images directory if it doesn't exist"""
@@ -16,7 +21,7 @@ def ensure_images_directory():
         os.makedirs(images_dir)
     return images_dir
 
-def generate_image(prompt, model="black-forest-labs/FLUX.1-dev", steps=10, n=1):
+def generate_image(prompt, model, steps=20, n=1, height=1024, width=1024, guidance=3.5):
     """
     Generate an image using Together.ai's API
     
@@ -25,6 +30,9 @@ def generate_image(prompt, model="black-forest-labs/FLUX.1-dev", steps=10, n=1):
         model (str): The model to use for generation
         steps (int): Number of diffusion steps
         n (int): Number of images to generate
+        height (int): Height of the generated image
+        width (int): Width of the generated image
+        guidance (float): Guidance scale for the generation
     
     Returns:
         PIL.Image: The generated image
@@ -41,7 +49,10 @@ def generate_image(prompt, model="black-forest-labs/FLUX.1-dev", steps=10, n=1):
         prompt=prompt,
         model=model,
         steps=steps,
-        n=n
+        n=n,
+        height=height,
+        width=width,
+        guidance=guidance
     )
     
     if not response or not response.data or not response.data[0].url:
@@ -55,23 +66,116 @@ def generate_image(prompt, model="black-forest-labs/FLUX.1-dev", steps=10, n=1):
     image = Image.open(BytesIO(image_response.content))
     return image
 
+def generate_image_http(prompt, model, steps=20, n=1, height=1024, width=1024, guidance=3.5):
+    """
+    Generate an image using Together.ai's HTTP API directly
+    
+    Args:
+        prompt (str): The text prompt for image generation
+        model (str): The model to use for generation
+        steps (int): Number of diffusion steps
+        n (int): Number of images to generate
+        height (int): Height of the generated image
+        width (int): Width of the generated image
+        guidance (float): Guidance scale for the generation
+    
+    Returns:
+        PIL.Image: The generated image
+    """
+    api_key = os.getenv("TOGETHER_API_KEY")
+    if not api_key:
+        raise ValueError("TOGETHER_API_KEY not found in environment variables")
+
+    url = "https://api.together.xyz/v1/images/generations"
+    
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "steps": steps,
+        "n": n,
+        "height": height,
+        "width": width,
+        "guidance": guidance,
+        "output_format": "jpeg",
+        "response_format": "base64"
+    }
+    
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "authorization": f"Bearer {api_key}"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    response.raise_for_status()
+    
+    # Parse the response
+    response_data = response.json()
+    if not response_data or "data" not in response_data or not response_data["data"]:
+        raise ValueError("No image data received from API")
+    
+    # Get the base64 image data
+    image_data = response_data["data"][0]["b64_json"]
+    
+    # Convert base64 to image
+    image_bytes = base64.b64decode(image_data)
+    image = Image.open(BytesIO(image_bytes))
+    return image
+
 def main():
     # Example usage
     prompt = "A serene landscape with mountains and a lake at sunset"
+    model = DEFAULT_MODEL  # Using the default model that we know works
+    
+    # Common parameters for both methods
+    params = {
+        "steps": 20,
+        "n": 1,
+        "height": 1024,
+        "width": 1024,
+        "guidance": 3.5
+    }
+    
     try:
-        image = generate_image(prompt)
+        # Try both methods with the default model
+        print(f"Generating image using SDK method with model: {model}...")
+        image = generate_image(
+            prompt=prompt,
+            model=model,
+            **params
+        )
         
         # Ensure images directory exists
         images_dir = ensure_images_directory()
         
         # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"generated_image_{timestamp}.png"
+        filename = f"generated_image_sdk_{timestamp}.png"
         filepath = os.path.join(images_dir, filename)
         
         # Save the image
         image.save(filepath)
         print(f"Image generated and saved as '{filepath}'")
+        
+        print(f"\nGenerating image using HTTP method with model: {model}...")
+        image_http = generate_image_http(
+            prompt=prompt,
+            model=model,
+            **params
+        )
+        filename_http = f"generated_image_http_{timestamp}.png"
+        filepath_http = os.path.join(images_dir, filename_http)
+        image_http.save(filepath_http)
+        print(f"Image generated and saved as '{filepath_http}'")
+        
+        # Uncomment the following lines to test the alternative model
+        # print(f"\nTesting alternative model: {ALTERNATIVE_MODEL}")
+        # image_alt = generate_image_http(prompt, model=ALTERNATIVE_MODEL, **params)
+        # filename_alt = f"generated_image_alt_{timestamp}.png"
+        # filepath_alt = os.path.join(images_dir, filename_alt)
+        # image_alt.save(filepath_alt)
+        # print(f"Alternative model image saved as '{filepath_alt}'")
+        
     except Exception as e:
         print(f"Error generating image: {e}")
 
