@@ -21,7 +21,7 @@ def ensure_images_directory():
         os.makedirs(images_dir)
     return images_dir
 
-def generate_image(prompt, model, steps=20, n=1, height=1024, width=1024, guidance=3.5):
+def generate_image(prompt, model, steps, n, height, width, guidance):
     """
     Generate an image using Together.ai's API
     
@@ -66,7 +66,7 @@ def generate_image(prompt, model, steps=20, n=1, height=1024, width=1024, guidan
     image = Image.open(BytesIO(image_response.content))
     return image
 
-def generate_image_http(prompt, model, steps=20, n=1, height=1024, width=1024, guidance=3.5):
+def generate_image_http(prompt, model, steps, n, height, width, guidance):
     """
     Generate an image using Together.ai's HTTP API directly
     
@@ -122,13 +122,21 @@ def generate_image_http(prompt, model, steps=20, n=1, height=1024, width=1024, g
     image = Image.open(BytesIO(image_bytes))
     return image
 
+def save_generated_image(image, method_name, timestamp):
+    """Helper function to save generated images"""
+    images_dir = ensure_images_directory()
+    filename = f"generated_image_{method_name}_{timestamp}.png"
+    filepath = os.path.join(images_dir, filename)
+    image.save(filepath)
+    print(f"Image generated and saved as '{filepath}'")
+
 def main():
     # Example usage
     prompt = "A serene landscape with mountains and a lake at sunset"
     model = DEFAULT_MODEL  # Using the default model that we know works
     
-    # Common parameters for both methods
-    params = {
+    # Generation parameters
+    generation_params = {
         "steps": 20,
         "n": 1,
         "height": 1024,
@@ -137,44 +145,30 @@ def main():
     }
     
     try:
-        # Try both methods with the default model
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Generate image using SDK method
         print(f"Generating image using SDK method with model: {model}...")
         image = generate_image(
             prompt=prompt,
             model=model,
-            **params
+            **generation_params
         )
+        save_generated_image(image, "sdk", timestamp)
         
-        # Ensure images directory exists
-        images_dir = ensure_images_directory()
-        
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"generated_image_sdk_{timestamp}.png"
-        filepath = os.path.join(images_dir, filename)
-        
-        # Save the image
-        image.save(filepath)
-        print(f"Image generated and saved as '{filepath}'")
-        
+        # Generate image using HTTP method
         print(f"\nGenerating image using HTTP method with model: {model}...")
         image_http = generate_image_http(
             prompt=prompt,
             model=model,
-            **params
+            **generation_params
         )
-        filename_http = f"generated_image_http_{timestamp}.png"
-        filepath_http = os.path.join(images_dir, filename_http)
-        image_http.save(filepath_http)
-        print(f"Image generated and saved as '{filepath_http}'")
+        save_generated_image(image_http, "http", timestamp)
         
         # Uncomment the following lines to test the alternative model
         # print(f"\nTesting alternative model: {ALTERNATIVE_MODEL}")
-        # image_alt = generate_image_http(prompt, model=ALTERNATIVE_MODEL, **params)
-        # filename_alt = f"generated_image_alt_{timestamp}.png"
-        # filepath_alt = os.path.join(images_dir, filename_alt)
-        # image_alt.save(filepath_alt)
-        # print(f"Alternative model image saved as '{filepath_alt}'")
+        # image_alt = generate_image_http(prompt, model=ALTERNATIVE_MODEL, **generation_params)
+        # save_generated_image(image_alt, "alt", timestamp)
         
     except Exception as e:
         print(f"Error generating image: {e}")
