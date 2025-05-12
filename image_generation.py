@@ -4,9 +4,17 @@ from together import Together
 import requests
 from PIL import Image
 from io import BytesIO
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
+
+def ensure_images_directory():
+    """Create images directory if it doesn't exist"""
+    images_dir = "images"
+    if not os.path.exists(images_dir):
+        os.makedirs(images_dir)
+    return images_dir
 
 def generate_image(prompt, model="black-forest-labs/FLUX.1-dev", steps=10, n=1):
     """
@@ -52,9 +60,18 @@ def main():
     prompt = "A serene landscape with mountains and a lake at sunset"
     try:
         image = generate_image(prompt)
+        
+        # Ensure images directory exists
+        images_dir = ensure_images_directory()
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"generated_image_{timestamp}.png"
+        filepath = os.path.join(images_dir, filename)
+        
         # Save the image
-        image.save("generated_image.png")
-        print("Image generated and saved as 'generated_image.png'")
+        image.save(filepath)
+        print(f"Image generated and saved as '{filepath}'")
     except Exception as e:
         print(f"Error generating image: {e}")
 
